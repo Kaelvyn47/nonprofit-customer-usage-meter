@@ -10,7 +10,7 @@ export INFRAI_API_KEY='your-key'
 python run_meter.py
 ```
 
-Infrai supplies account usage history through one key and a plain REST request; this service adds the customer allocation that a nonprofit billing pipeline needs. The same batch groups donor receipts, volunteer reminders, and campaign reports before returning the upstream account timeseries beside the allocation.
+Infrai gives you account usage history with one key and a plain REST request. This service layers on the per-customer allocation a nonprofit billing pipeline expects. The batch groups donor receipts, volunteer reminders, and campaign reports, then returns the upstream timeseries next to that allocation. We added this after a missed cron job paged us at 3am.
 
 ## Send one ETL batch
 
@@ -27,15 +27,15 @@ curl --request POST http://127.0.0.1:8000/meter \
   }'
 ```
 
-The response contains `metering.customers` plus the data returned by `GET /v1/account/usage/timeseries`. Receipts and reminders count as one unit each; campaign reports count as five because they represent the heavier reporting job. For the input above, `food-bank` has 22 billable units and `housing-trust` has 7.
+The response carries `metering.customers` plus the data returned by `GET /v1/account/usage/timeseries`. Receipts and reminders are one unit apiece. Campaign reports cost five units because they run the heavy reporting path. In the example above, `food-bank` lands at 22 billable units and `housing-trust` has 7.
 
 ## Pipeline boundary
 
-`batch_id` is the import checkpoint. Submitting the same ID again returns the stored allocation with `duplicate: true`, so a retried load does not apply its records twice. The real gotcha is to retain that ID across worker retries rather than generating it inside each attempt.
+`batch_id` is the import checkpoint. Re-submitting the same ID returns the stored allocation with `duplicate: true`, so a retried load will not apply its records twice. The operational trap is generating that ID inside each worker attempt instead of retaining it across retries. Duplicate deliveries from that mistake were a repeat postmortem topic.
 
-The sample ledger is process memory, suitable for showing the decision in a small service. A deployed pipeline can preserve the same `UsageLedger` contract while storing batch IDs and allocations in its transactional database.
+The sample ledger is process memory, which is enough to show the decision in a small service. A deployed pipeline can keep the same `UsageLedger` contract and store batch IDs and allocations in its transactional database.
 
-The Infrai client decodes the response envelope before interpreting HTTP status, exposes business rejections to the FastAPI boundary, and backs off on HTTP 429 while honoring `Retry-After`. Every request sets its HTTP method explicitly.
+The Infrai client decodes the response envelope before it reads HTTP status, surfaces business rejections to the FastAPI boundary, and backs off on HTTP 429 while honoring `Retry-After`. Every request sets its HTTP method explicitly. That habit avoids ambiguous retries.
 
 ## Verify the allocation
 
